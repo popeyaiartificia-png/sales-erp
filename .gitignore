@@ -17,3 +17,7 @@ venv/
 /.claude/
 .DS_Store
 Thumbs.db
+
+# Local Supabase CLI state.
+/supabase/.temp/
+/supabase/.branches/

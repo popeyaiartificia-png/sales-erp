@@ -316,6 +316,7 @@ html,.dbars,.tblwrap,.queue,.modal{scrollbar-color:var(--line2) transparent;scro
 }
 @media (max-width:600px){.grid4{grid-template-columns:1fr 1fr}.lf-row,.fgrid{grid-template-columns:1fr}.maprow{grid-template-columns:1fr}.hbar{grid-template-columns:100px 1fr 44px}}
 </style>
+<script src="cloud.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -335,7 +336,7 @@ html,.dbars,.tblwrap,.queue,.modal{scrollbar-color:var(--line2) transparent;scro
 <div id="toasts"></div>
 
 <!-- VCCI directory records (read-only, loaded from the VCCI folder next to this one) -->
-<script src="../VCCI/VCCI_Data/data.js" charset="utf-8"></script>
+<script>if(!window.SalesQuestCloud)document.write('<script src="../VCCI/VCCI_Data/data.js" charset="utf-8"><\/script>');</script>
 <script>
 /* ===================== helpers ===================== */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -579,9 +580,10 @@ function save(){LMAP=null;if(API.on){queuePush();return}
 /* ---------- automation backend (server.py) ----------
    When the page is served by server.py, the whole state lives in its SQLite file instead of
    localStorage: loaded once at boot, pushed back (debounced) after every save(). */
-const API={on:false,rev:0,dirty:false,offline:false,poll:null,cfg:null};
+const API={on:false,rev:0,dirty:false,offline:false,poll:null,cfg:null,cloud:!!window.SalesQuestCloud};
 async function api(path,opt={}){
-  const r=await fetch('/api/'+path,{method:opt.method||'GET',headers:{'X-SalesQuest':'1','Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined});
+  const options={method:opt.method||'GET',headers:{'X-SalesQuest':'1','Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined};
+  const r=await (API.cloud?window.SalesQuestCloud.request(path,options):fetch('/api/'+path,options));
   const j=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error(j.error||('HTTP '+r.status));e.status=r.status;throw e}
   return j;
@@ -902,7 +904,7 @@ const tplOptions=(sel,ch)=>['whatsapp','email'].filter(c=>!ch||c===ch).map(c=>`<
 const dbOptions=(sel,all)=>(all?`<option value="all">All databases</option>`:'')+S.dbs.map(d=>`<option value="${d.id}" ${sel===d.id?'selected':''}>${esc(d.name)}</option>`).join('');
 
 function emptyStart(){return `<div class="card empty" style="padding:56px 20px"><h2>Add your first leads</h2>
-  <p class="muted mt6">${VCCI.length?'':'The VCCI data file was not found at <span class="code">'+VCCI_BASE+'data.js</span>. '}Upload an Excel or CSV of leads, or add one by hand.</p>
+  <p class="muted mt6">${VCCI.length?'':API.cloud?'Original VCCI profiles are unavailable; imported leads are still available. ':'The VCCI data file was not found at <span class="code">'+VCCI_BASE+'data.js</span>. '}Upload an Excel or CSV of leads, or add one by hand.</p>
   <div class="row gap8 mt16" style="justify-content:center;flex-wrap:wrap"><button class="btn primary" data-act="upload">${ico('upload')} Upload Excel / CSV</button>
   <button class="btn" data-act="addLead">${ico('plus')} Add a lead</button></div></div>`}
 
@@ -1230,7 +1232,7 @@ function renderBulk(){const b=$('#bulk');if(!b)return;const n=LF.sel.size;
 /* ---------- Databases ---------- */
 function vDbs(){
   const c=calledTodaySet();
-  return `${VCCI.length?'':`<div class="banner"><div class="grow">The VCCI data file was not found at <span class="code">${VCCI_BASE}data.js</span>. Keep the <b>sales erp</b> and <b>VCCI</b> folders side by side in Downloads.</div></div>`}
+  return `${VCCI.length?'':API.cloud?'<div class="banner"><div class="grow">Original VCCI profiles are unavailable. Your imported leads are still available in Leads.</div></div>':`<div class="banner"><div class="grow">The VCCI data file was not found at <span class="code">${VCCI_BASE}data.js</span>. Keep the <b>sales erp</b> and <b>VCCI</b> folders side by side in Downloads.</div></div>`}
   <div class="drop" data-act="upload" id="dropzone">${ico('upload')}<h3>Drop an Excel or CSV file here, or click to browse</h3>
     <p class="muted small mt6">.xlsx · .xls · .csv. You'll match the columns (name, phone, email, city…) before importing. Each file can become its own database.</p></div>
   <div class="row between mt20" style="margin-bottom:12px"><h3>Your databases (${S.dbs.length})</h3><button class="btn sm" data-act="newDb">${ico('plus')} New empty database</button></div>
@@ -1596,6 +1598,7 @@ function targetForm(){const t=ensureTargets();
 function loadQR(){return window.QRCode?Promise.resolve():new Promise((ok,fail)=>{const s=document.createElement('script');
   s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';s.onload=ok;s.onerror=fail;document.head.appendChild(s)})}
 async function fillPhoneCard(){const el=$('#phoneCard');if(!el)return;const head='<div class="ch"><h3>Open on your phone</h3></div>';
+  if(API.cloud){el.innerHTML=head+'<p class="small muted">Open this same website on your phone and sign in to your account. Your leads are shared across your devices.</p><p class="code mt10">'+esc(location.href.split('?')[0])+'</p><button id="sq-cloud-signout" class="btn mt12">Sign out</button>';return}
   if(!API.on){el.innerHTML=head+'<p class="small muted">Start SalesQuest with <span class="code">Start SalesQuest.cmd</span> to use it on your phone.</p>';return}
   let r;try{r=await api('lan')}catch(e){el.innerHTML=head+(e.status===403?'<p class="small muted">You\'re already using SalesQuest from another device. The phone address and QR code are shown in Settings on the computer.</p>':'<p class="small muted">Phone access needs the latest server. Close the SalesQuest window and start it again with Start SalesQuest.cmd.</p>');return}
   if(!r.on){el.innerHTML=head+'<p class="small muted">Phone access is off. Start SalesQuest with <span class="code">Start SalesQuest.cmd</span> (it uses <span class="code">--lan</span>), then come back here.</p>';return}
@@ -1617,7 +1620,7 @@ function vSettings(){const s=S.settings;
       <div class="full row gap8"><button class="btn primary">Save settings</button><button type="button" class="btn" data-act="editTargets">${ico('grid')} KPI targets</button></div></div></form>
     <div class="card" id="phoneCard"><div class="ch"><h3>Open on your phone</h3></div><div class="small muted">Checking…</div></div>${(setTimeout(fillPhoneCard,0),'')}
     <div class="card"><div class="ch"><h3>Your data</h3></div>
-      <p class="small muted">Everything is saved in this browser on this computer. <b style="color:var(--text)">Export a backup regularly</b>, and especially before clearing browser data.</p>
+      <p class="small muted">${API.cloud?'Your leads and activity are saved in your private cloud database. Export a backup regularly.':'Everything is saved in this browser on this computer. <b style="color:var(--text)">Export a backup regularly</b>, and especially before clearing browser data.'}</p>
       <div class="row gap8 wrap mt12"><button class="btn" data-act="backup">${ico('download')} Export backup (.json)</button><button class="btn" data-act="restore">${ico('upload')} Restore backup</button></div>
       <div class="row gap8 wrap mt12"><button class="btn ghost" data-act="exportAll">${ico('download')} Export all leads to Excel</button></div>
       <div class="small muted mt16">${fmtN(S.leads.length)} leads · ${fmtN(S.log.length)} activity records · ~${Math.round(JSON.stringify(S).length/1024)} KB used of ~5,000 KB</div>
@@ -1670,7 +1673,7 @@ function backendCard(){
         <h4 class="mt16">Opt-out list</h4>
         <label class="mt6">Never message these (one email or phone number per line)<textarea name="optOut" rows="4">${esc((c.optOut||[]).join('\n'))}</textarea></label></div>
     </div>
-    <div class="row between mt16 wrap gap8"><span class="xs muted">Credentials are stored only on this PC in salesquest_data\\config.json, never in backups or exports.</span><button class="btn primary">Save backend settings</button></div>
+    <div class="row between mt16 wrap gap8"><span class="xs muted">${API.cloud?'Messaging credentials are stored in the protected backend and excluded from ERP exports.':'Credentials are stored only on this PC in salesquest_data\\config.json, never in backups or exports.'}</span><button class="btn primary">Save backend settings</button></div>
   </form>`;
 }
 
@@ -2208,10 +2211,11 @@ setInterval(()=>{if(S.daily.date&&S.daily.date!==today()){ensureDaily();render()
 
 /* boot */
 (async function boot(){
+  if(API.cloud){try{await window.SalesQuestCloud.ready}catch(e){return}}
   if(/^https?:$/.test(location.protocol)){
     try{await api('health');API.on=true;const r=await api('state');
       if(r.state){S=hydrate(r.state);API.rev=r.rev;LMAP=null}else API.fresh=true}
-    catch(e){API.on=false}
+    catch(e){if(API.cloud){window.SalesQuestCloud.showFailure(e.message);return}API.on=false}
   }
   if(S.demo||S.leads.some(l=>l.demo))clearDemo();
   {ensureDirDbs();ensureArtificiaScript();const added=syncVCCI();save();if(added){topUpDaily();setTimeout(()=>toast(`Loaded ${fmtN(added)} companies from the VCCI 2024 directory`,'good',4000),300)}}

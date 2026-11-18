@@ -1,0 +1,9 @@
+project_id = "sales-erp"
+
+[functions.salesquest-api]
+# The handler validates the user with Supabase Auth and checks the ERP allowlist.
+verify_jwt = false
+
+[functions.salesquest-worker]
+# Scheduled calls use a separate server-only worker token.
+verify_jwt = false
